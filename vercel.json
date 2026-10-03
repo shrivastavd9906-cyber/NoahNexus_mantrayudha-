@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "agent_engine.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "agent_engine.py"
+    }
+  ]
+}
