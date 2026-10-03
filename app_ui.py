@@ -4,8 +4,11 @@ Enterprise UI inspired by Klarna AI Assistant, Sierra AI, and Intercom Fin.
 Designed for MANTRA YUDHA E-Commerce Support Challenge.
 """
 
-import streamlit as st
+import json
+from html import escape
+
 import requests
+import streamlit as st
 
 from dataset_store import import_public_datasets
 
@@ -302,6 +305,11 @@ st.markdown("""
             linear-gradient(145deg, #171827, #111725 70%);
         box-shadow: 0 16px 42px rgba(0, 0, 0, .18);
     }
+    .act-card.answer { border-color: rgba(72,224,177,.34); background: linear-gradient(145deg,#142522,#111725 70%); }
+    .act-card.ask { border-color: rgba(250,190,88,.38); background: linear-gradient(145deg,#292317,#111725 70%); }
+    .act-card.act { border-color: rgba(92,163,255,.38); background: linear-gradient(145deg,#17263a,#111725 70%); }
+    .act-card.escalate, .act-card.error { border-color: rgba(255,112,126,.4); background: linear-gradient(145deg,#291b29,#111725 70%); }
+    .act-card.ready { border-color: rgba(177,139,255,.3); }
     .act-topline {
         display: flex;
         align-items: center;
@@ -314,6 +322,14 @@ st.markdown("""
         font-weight: 800;
         letter-spacing: -.04em;
     }
+    .act-card.answer .act-number, .act-card.answer .act-section-title { color: #72edc6; }
+    .act-card.ask .act-number, .act-card.ask .act-section-title { color: #ffd17d; }
+    .act-card.act .act-number, .act-card.act .act-section-title { color: #9cc8ff; }
+    .act-card.ready .act-number, .act-card.ready .act-section-title { color: #c3a8ff; }
+    .act-card.answer .act-tag { color:#72edc6; border-color:rgba(72,224,177,.28); background:rgba(72,224,177,.09); }
+    .act-card.ask .act-tag { color:#ffd17d; border-color:rgba(250,190,88,.28); background:rgba(250,190,88,.09); }
+    .act-card.act .act-tag { color:#9cc8ff; border-color:rgba(92,163,255,.28); background:rgba(92,163,255,.09); }
+    .act-card.ready .act-tag { color:#c3a8ff; border-color:rgba(177,139,255,.28); background:rgba(177,139,255,.09); }
     .act-label {
         color: #f6f5fb;
         font-size: 1.1rem;
@@ -364,6 +380,13 @@ st.markdown("""
     .act-code .key { color: #ff8b96; }
     .act-code .value { color: #8de4bf; }
     .act-code .number { color: #f6ce7a; }
+    .act-card.answer .act-code { border-color: rgba(72,224,177,.25); border-left-color: #48e0b1; }
+    .act-card.ask .act-code { border-color: rgba(250,190,88,.25); border-left-color: #fabe58; }
+    .act-card.act .act-code { border-color: rgba(92,163,255,.25); border-left-color: #5ca3ff; }
+    .act-card.ready .act-code { border-color: rgba(177,139,255,.25); border-left-color: #b18bff; }
+    .act-card.answer .act-code .key, .act-card.answer .act-code .number { color: #72edc6; }
+    .act-card.ask .act-code .key, .act-card.ask .act-code .number { color: #ffd17d; }
+    .act-card.act .act-code .key, .act-card.act .act-code .number { color: #9cc8ff; }
     .act-checks {
         display: grid;
         gap: 9px;
@@ -377,6 +400,10 @@ st.markdown("""
         color: #ff7885;
         font-weight: 800;
     }
+    .act-card.answer .act-checks span:before { color: #72edc6; }
+    .act-card.ask .act-checks span:before { color: #ffd17d; }
+    .act-card.act .act-checks span:before { color: #9cc8ff; }
+    .act-card.ready .act-checks span:before { color: #c3a8ff; }
     hr { border-color: var(--line); }
     @media (max-width: 900px) {
         [data-testid="stAppViewContainer"] > .main .block-container { padding: 1rem .8rem 1.3rem; }
@@ -593,20 +620,36 @@ with st.container(border=True):
                 # Render Klarna-style Refund Breakdown Card if present
                 ref = msg.get("refund_breakdown")
                 if ref:
-                    req_row = f"<div class='refund-row'><span>Requested Amount:</span><span>₹{ref.get('requested_amount', 0):,.2f}</span></div>" if ref.get("requested_amount") else ""
-                    cap_banner = f"<div style='margin-bottom:6px;'><span class='badge-pill badge-amber'>⚠️ Capped to Order Value</span> <span style='font-size:0.75rem; color:#fbbf24;'>{ref.get('cap_reason')}</span></div>" if ref.get("is_capped") else ""
-                    restock_row = f"<div class='refund-row' style='color:#f87171;'><span>Restocking Fee ({ref.get('restocking_fee_percent')}%):</span><span>-₹{ref.get('restocking_fee_amount', 0):,.2f}</span></div>" if ref.get("restocking_fee_amount") else ""
-                    
-                    st.markdown(f"""
-                    <div class="refund-card">
-                        {cap_banner}
-                        <div style="font-weight: 700; margin-bottom: 6px; color: #e2e8f0;">💰 Refund Assessment Summary</div>
-                        <div class="refund-row"><span>Original Order Value:</span><span>₹{ref.get('original_amount', 0):,.2f}</span></div>
-                        {req_row}
-                        {restock_row}
-                        <div class="refund-row refund-total"><span>Approved Net Refund:</span><span>₹{ref.get('net_refund_amount', 0):,.2f}</span></div>
-                    </div>
-                    """, unsafe_allow_html=True)
+                    refund_parts = ['<div class="refund-card">']
+                    if ref.get("is_capped"):
+                        refund_parts.append(
+                            "<div style='margin-bottom:6px;'>"
+                            "<span class='badge-pill badge-amber'>⚠️ Capped to Order Value</span> "
+                            "<span style='font-size:0.75rem;color:#fbbf24;'>"
+                            f"{escape(str(ref.get('cap_reason') or ''))}</span></div>"
+                        )
+                    refund_parts.extend([
+                        '<div style="font-weight:700;margin-bottom:6px;color:#e2e8f0;">'
+                        '💰 Refund Assessment Summary</div>',
+                        "<div class='refund-row'><span>Original Order Value:</span>"
+                        f"<span>₹{ref.get('original_amount', 0):,.2f}</span></div>",
+                    ])
+                    if ref.get("requested_amount"):
+                        refund_parts.append(
+                            "<div class='refund-row'><span>Requested Amount:</span>"
+                            f"<span>₹{ref.get('requested_amount', 0):,.2f}</span></div>"
+                        )
+                    if ref.get("restocking_fee_amount"):
+                        refund_parts.append(
+                            "<div class='refund-row' style='color:#f87171;'>"
+                            f"<span>Restocking Fee ({ref.get('restocking_fee_percent')}%):</span>"
+                            f"<span>-₹{ref.get('restocking_fee_amount', 0):,.2f}</span></div>"
+                        )
+                    refund_parts.append(
+                        "<div class='refund-row refund-total'><span>Approved Net Refund:</span>"
+                        f"<span>₹{ref.get('net_refund_amount', 0):,.2f}</span></div></div>"
+                    )
+                    st.markdown("".join(refund_parts), unsafe_allow_html=True)
                 
                 # Render Intercom Fin-style Quick Action Chips
                 actions = msg.get("quick_actions", [])
@@ -639,39 +682,124 @@ with st.container(border=True):
         st.rerun()
 
 # -----------------------------------------------------------------------------
-# Verified Action Explainer
+# Latest Agent Task
 # -----------------------------------------------------------------------------
-st.markdown("""
-<section class="act-card" aria-label="ACT verified action guide">
+trace = st.session_state.latest_trace
+if not trace:
+    task_state = {
+        "number": "00",
+        "move": "READY",
+        "style": "ready",
+        "tag": "AWAITING A TASK",
+        "when": "Send a message or choose a support preset to see what the assistant did.",
+        "checks": ["The current customer persona is selected", "Order and policy facts are verified before actions"],
+        "payload": {"status": "ready", "next_step": "ask a support question"},
+    }
+elif trace.get("error"):
+    task_state = {
+        "number": "!",
+        "move": "ERROR",
+        "style": "error",
+        "tag": "TASK NOT COMPLETED",
+        "when": "The assistant could not complete this request because the support service returned an error.",
+        "checks": ["Confirm the API is running at localhost:8000", "Retry after the service is healthy"],
+        "payload": {"status": "error", "detail": str(trace["error"])[:180]},
+    }
+else:
+    move = str(trace.get("terminal_move", "ANSWER")).upper()
+    intents = trace.get("intents") or ["customer_support"]
+    verified = trace.get("verification_data") or {}
+    if not isinstance(verified, dict):
+        verified = {}
+    move_configs = {
+        "ANSWER": {
+            "number": "01", "style": "answer", "tag": "VERIFIED RESPONSE",
+            "when": "The assistant answered using verified order, product, or policy information.",
+            "checks": ["Answer is grounded in verified records", "No unapproved action was executed"],
+        },
+        "ASK": {
+            "number": "02", "style": "ask", "tag": "CLARIFICATION NEEDED",
+            "when": "The assistant needs a missing detail or customer confirmation before proceeding.",
+            "checks": ["Missing detail is identified", "No irreversible action is taken before confirmation"],
+        },
+        "ACT": {
+            "number": "03", "style": "act", "tag": "VERIFIED EXECUTION",
+            "when": "The assistant completed an action after verifying the order and policy eligibility.",
+            "checks": ["Policy window and eligibility were verified", "Action uses verified order parameters"],
+        },
+        "ESCALATE": {
+            "number": "04", "style": "escalate", "tag": "HUMAN HANDOFF",
+            "when": "The request needs human review because of a risk flag, dispute, or explicit handoff request.",
+            "checks": ["Risk or handoff reason is recorded", "Ticket is routed to the support team"],
+        },
+    }
+    task_state = move_configs.get(move, move_configs["ANSWER"]).copy()
+    task_state["move"] = move if move in move_configs else "ANSWER"
+    task_state["payload"] = {
+        "move": task_state["move"],
+        "intent": intents[:4],
+    }
+    safe_fields = (
+        "order_id", "status", "delivery_eta", "eta", "return_id", "refund_id",
+        "ticket_id", "missing_parameter", "return_window_days", "eligible",
+        "found", "capped_refund", "order_total", "net_refund", "injection_flag",
+        "safety_flag", "domain_restricted",
+    )
+    for field in safe_fields:
+        if field in verified:
+            task_state["payload"][field] = verified[field]
+    if task_state["move"] == "ACT":
+        if verified.get("return_id"):
+            task_state["payload"]["action"] = "create_return_and_refund"
+        elif verified.get("refund_id"):
+            task_state["payload"]["action"] = "create_refund"
+        else:
+            task_state["payload"]["action"] = "execute_verified_action"
+    elif task_state["move"] == "ASK":
+        task_state["payload"]["next_step"] = "wait_for_customer_confirmation"
+    elif task_state["move"] == "ESCALATE":
+        task_state["payload"]["next_step"] = "human_support_review"
+    else:
+        task_state["payload"]["next_step"] = "respond_with_verified_information"
+
+    refund = trace.get("refund_breakdown")
+    if isinstance(refund, dict):
+        for source, target in (
+            ("requested_amount", "requested_amount"),
+            ("net_refund_amount", "approved_amount"),
+            ("is_capped", "refund_capped"),
+        ):
+            if refund.get(source) is not None:
+                task_state["payload"][target] = refund[source]
+    task_state["when"] = (
+        task_state["when"] + " Detected: " + ", ".join(str(item).replace("_", " ") for item in intents[:3]) + "."
+    )
+
+checks_html = "".join(f"<span>{escape(check)}</span>" for check in task_state["checks"])
+payload_html = escape(json.dumps(task_state["payload"], ensure_ascii=False, indent=2))
+when_html = escape(task_state["when"])
+tag_html = escape(task_state["tag"])
+move_html = escape(task_state["move"])
+number_html = escape(task_state["number"])
+st.markdown(f"""
+<section class="act-card {task_state['style']}" aria-label="Latest agent task: {move_html}">
     <div class="act-topline">
-        <span class="act-number">03</span>
-        <span class="act-label">ACT</span>
-        <span class="act-tag">VERIFIED EXECUTION</span>
+        <span class="act-number">{number_html}</span>
+        <span class="act-label">{move_html}</span>
+        <span class="act-tag">{tag_html}</span>
     </div>
     <div class="act-grid">
         <div>
-            <div class="act-section-title">When to use</div>
-            <div class="act-copy">Verified request, eligible under policy, within approval threshold, and no risk flags.</div>
+            <div class="act-section-title">What happened</div>
+            <div class="act-copy">{when_html}</div>
         </div>
         <div>
-            <div class="act-section-title">Example</div>
-            <div class="act-code">
-                <span class="act-code-line">{</span>
-                <span class="act-code-line">&nbsp;&nbsp;<span class="key">"intent"</span>: <span class="value">"refund"</span>,</span>
-                <span class="act-code-line">&nbsp;&nbsp;<span class="key">"order_id"</span>: <span class="value">"NM1042"</span>,</span>
-                <span class="act-code-line">&nbsp;&nbsp;<span class="key">"amount"</span>: <span class="number">2499</span>,</span>
-                <span class="act-code-line">&nbsp;&nbsp;<span class="key">"action"</span>: <span class="value">"create_refund"</span>,</span>
-                <span class="act-code-line">&nbsp;&nbsp;<span class="key">"escalate"</span>: <span class="value">false</span></span>
-                <span class="act-code-line">}</span>
-            </div>
+            <div class="act-section-title">Task details</div>
+            <pre class="act-code">{payload_html}</pre>
         </div>
         <div>
-            <div class="act-section-title">Must check</div>
-            <div class="act-checks">
-                <span>Policy version + window arithmetic</span>
-                <span>Approval threshold not exceeded</span>
-                <span>Tool call uses verified parameters</span>
-            </div>
+            <div class="act-section-title">Checks</div>
+            <div class="act-checks">{checks_html}</div>
         </div>
     </div>
 </section>
@@ -692,7 +820,7 @@ st.dataframe(
             "Dataset": dataset["display_name"],
             "Records": (
                 f'{dataset["record_count"]:,}'
-                if dataset["record_count"] is not None else "Not bundled"
+                if dataset["status"] == "loaded" else "Not bundled"
             ),
             "Availability": dataset["status"],
             "What's included": dataset["description"],

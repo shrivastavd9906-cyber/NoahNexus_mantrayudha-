@@ -215,7 +215,7 @@ def import_public_datasets() -> list[dict[str, Any]]:
                 "INSERT INTO public_dataset_registry "
                 "(dataset_key, display_name, table_name, record_count, description, status) "
                 "VALUES (?, ?, ?, ?, ?, ?)",
-                [(key, title, table, len(records) if status == "loaded" else None, description, status)
+                [(key, title, table, len(records) if status == "loaded" else 0, description, status)
                  for key, title, table, description, status, _, records in datasets],
             )
             conn.execute(
